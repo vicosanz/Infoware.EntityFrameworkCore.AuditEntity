@@ -38,6 +38,14 @@
     {
     }
 
+    public class BlogAuditMapper : Profile
+    {
+        public BlogAuditMapper()
+        {
+            CreateMap<ExtendedBaseAudit, BlogAudit>();
+        }
+    }
+
 ```
 
 - Insert Audit table to the DBContext
@@ -78,9 +86,21 @@
                 cancellationToken);
         }
 
-
 ```
 
+- Finally you must inject dependencies
+
+```csharp
+        services.AddAnotherService();
+        ....
+        // inject your session service or another method to get additional information for audit tables
+        services.AddTransient<ISessionService, YourSessionService>();
+
+        services.AddSingleton<ILogJsonSerializer, LogJsonSerializer>();
+        //"typeof(MyContext)" charge Mappers from project where context was created
+        services.AddAutoMapper(new[] { typeof(Program), typeof(MyContext) });
+
+```
 ## Buy me a coofee
 If you want, buy me a coofee :coffee: https://www.paypal.com/paypalme/vicosanzdev?locale.x=es_XC
 
