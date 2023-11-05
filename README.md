@@ -38,14 +38,6 @@
     {
     }
 
-    public class BlogAuditMapper : Profile
-    {
-        public BlogAuditMapper()
-        {
-            CreateMap<ExtendedBaseAudit, BlogAudit>();
-        }
-    }
-
 ```
 
 - Insert Audit table to the DBContext
@@ -63,29 +55,44 @@
     public class MyContext : DbContext
     {
         private readonly ISessionService _sessionService;
-        private readonly IMapper _mapper;
         private readonly ILogJsonSerializer _logJsonSerializer;
 
-        public MyContext(DbContextOptions options, IMapper mapper, ILogJsonSerializer logJsonSerialize, ISessionService sessionService) : base(options)
+        public MyContext(DbContextOptions options, ILogJsonSerializer logJsonSerialize, ISessionService sessionService) : base(options)
         {
             _sessionService = sessionService;
-            _mapper = mapper;
             _logJsonSerializer = logJsonSerializer;
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var data = await _sessionService.GetSessionDataAsync();
-            return await this.SaveWithAuditsAsync(_mapper, _logJsonSerializer, 
-                (cancellationToken) => base.SaveChangesAsync(cancellationToken), 
-                () => new ExtendedBaseAudit()
-                {
-                    UserId = data.UserId!,
-                    UserName = data.UserName!,
-                },
+            return await this.SaveWithAuditsAsync(_logJsonSerializer,
+                FactoryBase, 
+                (cancellationToken) => base.SaveChangesAsync(cancellationToken),
                 cancellationToken);
         }
 
+        internal static Task<IBaseAudit?> FactoryBase(Type source)
+        {
+            var result = (IBaseAudit?)Activator.CreateInstance(source);
+            return Task.FromResult(result);
+        }
+
+
+```
+
+- If you extended a base audit with additional fields, you must filled manually
+
+```csharp
+        internal static async Task<IBaseAudit?> FactoryBase(Type source)
+        {
+            var data = await _sessionService.GetSessionDataAsync();
+
+            var result = (ExtendedBaseAudit?)Activator.CreateInstance(source);
+            result!.UserId = data.UserId;
+            result!.UserName = data.UserName;
+            return result;
+        }
 ```
 
 - Finally you must inject dependencies
@@ -97,8 +104,6 @@
         services.AddTransient<ISessionService, YourSessionService>();
 
         services.AddSingleton<ILogJsonSerializer, LogJsonSerializer>();
-        //"typeof(MyContext)" charge Mappers from project where context was created
-        services.AddAutoMapper(new[] { typeof(Program), typeof(MyContext) });
 
 ```
 ## Buy me a coofee
