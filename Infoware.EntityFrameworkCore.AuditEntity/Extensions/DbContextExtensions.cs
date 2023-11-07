@@ -8,7 +8,7 @@ namespace Infoware.EntityFrameworkCore.AuditEntity.Extensions
 {
     public static class DbContextExtensions
     {
-        internal static Task<IBaseAudit?> FactoryBase(Type source)
+        internal static Task<IBaseAudit?> FactoryBaseAsync(Type source)
         {
             return Task.FromResult(Activator.CreateInstance(source) as IBaseAudit);
         }
@@ -16,13 +16,13 @@ namespace Infoware.EntityFrameworkCore.AuditEntity.Extensions
         public static Task<int> SaveWithAuditsAsync(this DbContext context, ILogJsonSerializer logJsonSerializer, 
             Func<CancellationToken, Task<int>> baseSaveChangesAsync, CancellationToken cancellationToken = default)
         {
-            return SaveWithAuditsAsync(context, logJsonSerializer, FactoryBase, baseSaveChangesAsync, cancellationToken);
+            return SaveWithAuditsAsync(context, logJsonSerializer, FactoryBaseAsync, baseSaveChangesAsync, cancellationToken);
         }
 
         public static async Task<int> SaveWithAuditsAsync<T>(this DbContext context, ILogJsonSerializer logJsonSerializer,
             Func<Type, Task<T?>> factoryAudit, Func<CancellationToken, Task<int>> baseSaveChangesAsync, CancellationToken cancellationToken = default) where T : IBaseAudit
         {
-            var operationsUpdatesDeletes = context.ChangeTracker.Entries()
+            var operationsUpdatesDeletes = await context.ChangeTracker.Entries()
                 .Where(e => e.State == EntityState.Modified || e.State == EntityState.Deleted)
                 .AddEntriesAsync(logJsonSerializer, factoryAudit);
 
@@ -31,12 +31,17 @@ namespace Infoware.EntityFrameworkCore.AuditEntity.Extensions
 
             var result = await baseSaveChangesAsync(cancellationToken);
 
-            var operationsAdds = entriesAdded.AddEntriesAsync(logJsonSerializer, factoryAudit, EntityState.Added);
+            var operationsAdds = await entriesAdded.AddEntriesAsync(logJsonSerializer, factoryAudit, EntityState.Added);
             context.AddRange(operationsUpdatesDeletes);
             context.AddRange(operationsAdds);
 
             await baseSaveChangesAsync(cancellationToken);
             return result;
+        }
+
+        internal static IBaseAudit? FactoryBase(Type source)
+        {
+            return Activator.CreateInstance(source) as IBaseAudit;
         }
 
         public static int SaveWithAudits(this DbContext context, ILogJsonSerializer logJsonSerializer, Func<int> baseSaveChanges)
@@ -45,18 +50,18 @@ namespace Infoware.EntityFrameworkCore.AuditEntity.Extensions
         }
 
         public static int SaveWithAudits<T>(this DbContext context, ILogJsonSerializer logJsonSerializer, 
-            Func<Type, Task<T?>> factoryAudit, Func<int> baseSaveChanges) where T : IBaseAudit
+            Func<Type, T?> factoryAudit, Func<int> baseSaveChanges) where T : IBaseAudit
         {
             var operationsUpdatesDeletes = context.ChangeTracker.Entries()
                 .Where(e => e.State == EntityState.Modified || e.State == EntityState.Deleted)
-                .AddEntriesAsync(logJsonSerializer, factoryAudit);
+                .AddEntries(logJsonSerializer, factoryAudit);
 
             var entriesAdded = context.ChangeTracker.Entries()
                 .Where(e => e.State == EntityState.Added).ToList();
 
             var result = baseSaveChanges();
 
-            var operationsAdds = entriesAdded.AddEntriesAsync(logJsonSerializer, factoryAudit, EntityState.Added);
+            var operationsAdds = entriesAdded.AddEntries(logJsonSerializer, factoryAudit, EntityState.Added);
             context.AddRange(operationsUpdatesDeletes);
             context.AddRange(operationsAdds);
 
@@ -64,7 +69,7 @@ namespace Infoware.EntityFrameworkCore.AuditEntity.Extensions
             return result;
         }
 
-        internal static async Task<List<IBaseAudit>> AddEntriesAsync<T>(this IEnumerable<EntityEntry> entries, ILogJsonSerializer logJsonSerializer, 
+        internal static async Task<List<IBaseAudit>> AddEntriesAsync<T>(this IEnumerable<EntityEntry> entries, ILogJsonSerializer logJsonSerializer,
             Func<Type, Task<T?>> factoryAudit, EntityState? overrideState = null) where T : IBaseAudit
         {
             var result = new List<IBaseAudit>();
@@ -88,7 +93,52 @@ namespace Infoware.EntityFrameworkCore.AuditEntity.Extensions
                     if (null != prop && prop.CanWrite)
                     {
                         prop.SetValue(objResult, keyValue, null);
-                    }                    
+                    }
+
+                    switch (overrideState ?? entry.State)
+                    {
+                        case EntityState.Added:
+                            WriteHistoryAddedState(objResult, entry, logJsonSerializer);
+                            break;
+                        case EntityState.Modified:
+                            WriteHistoryModifiedState(objResult, entry, logJsonSerializer);
+                            break;
+                        case EntityState.Deleted:
+                            WriteHistoryDeletedState(objResult, entry, logJsonSerializer);
+                            break;
+                    }
+
+                    result.Add(objResult);
+                }
+            }
+            return result;
+        }
+
+        internal static List<IBaseAudit> AddEntries<T>(this IEnumerable<EntityEntry> entries, ILogJsonSerializer logJsonSerializer,
+            Func<Type, T?> factoryAudit, EntityState? overrideState = null) where T : IBaseAudit
+        {
+            var result = new List<IBaseAudit>();
+            if (entries == null) return result;
+
+            foreach (var entry in entries)
+            {
+                var auditableEntityType = entry.Entity.GetType().GetInterfaces()
+                    .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAuditable<>));
+                if (auditableEntityType != null)
+                {
+                    var keyName = entry.Metadata.FindPrimaryKey()!.Properties[0]!;
+                    var keyValue = entry.Property(keyName.Name).CurrentValue;
+
+                    Type entityAuditType = auditableEntityType.GenericTypeArguments.First();
+
+                    IBaseAudit? objResult = factoryAudit(entityAuditType);
+                    objResult!.Operation = entry.State.ToString();
+
+                    PropertyInfo? prop = entityAuditType.GetProperty("TableId", BindingFlags.Public | BindingFlags.Instance);
+                    if (null != prop && prop.CanWrite)
+                    {
+                        prop.SetValue(objResult, keyValue, null);
+                    }
 
                     switch (overrideState ?? entry.State)
                     {
