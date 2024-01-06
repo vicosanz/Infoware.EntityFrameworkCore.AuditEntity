@@ -1,7 +1,7 @@
 ﻿using Infoware.EntityFrameworkCore.AuditEntity;
 using System.ComponentModel.DataAnnotations;
 
-namespace Test.Models
+namespace WebApplication1.Models
 {
     public class Blog : IAuditable<BlogAudit>
     {

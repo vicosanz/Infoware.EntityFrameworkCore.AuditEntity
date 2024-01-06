@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Infoware.SRI.DocumentosElectronicos.Context.Models
+namespace WebApplication1.Models
 {
     public class ExtendedBaseAudit<TEntity, TUniqueId> : BaseAudit<TEntity, TUniqueId>, IExtendedBaseAudit where TEntity : IAuditable
     {
@@ -19,8 +19,8 @@ namespace Infoware.SRI.DocumentosElectronicos.Context.Models
 
     public interface IExtendedBaseAudit : IBaseAudit
     {
-        public string UserId { get; set; } 
+        public string UserId { get; set; }
 
-        public string UserName { get; set; } 
+        public string UserName { get; set; }
     }
 }

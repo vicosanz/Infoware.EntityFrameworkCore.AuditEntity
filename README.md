@@ -49,63 +49,54 @@
 
 ```
 
-- Now you must override SaveChanges method or create new one to save changes without forget save audits. If you create a new BaseAudit you must inject additional fields in this process
+- Create an interceptor class inherit from BaseAuditInterceptor, if you extended a base audit with additional fields, you must filled manually
 
 ```csharp
-    public class MyContext : DbContext
+    public class AuditInterceptor : BaseAuditInterceptor
     {
-        private readonly ISessionService _sessionService;
-        private readonly ILogJsonSerializer _logJsonSerializer;
+        public AuditInterceptor(ILogJsonSerializer logJsonSerializer): base(logJsonSerializer) { }
 
-        public MyContext(DbContextOptions options, ILogJsonSerializer logJsonSerialize, ISessionService sessionService) : base(options)
+        /// Forget that if you do not extend base audit
+        public override async Task<IBaseAudit?> InitAuditObject(Type entityAuditType)
         {
-            _sessionService = sessionService;
-            _logJsonSerializer = logJsonSerializer;
-        }
-
-        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-        {
-            var data = await _sessionService.GetSessionDataAsync();
-            return await this.SaveWithAuditsAsync(_logJsonSerializer,
-                FactoryBase, 
-                (cancellationToken) => base.SaveChangesAsync(cancellationToken),
-                cancellationToken);
-        }
-
-        internal static Task<IBaseAudit?> FactoryBase(Type source)
-        {
-            var result = (IBaseAudit?)Activator.CreateInstance(source);
-            return Task.FromResult(result);
-        }
-
-
-```
-
-- If you extended a base audit with additional fields, you must filled manually
-
-```csharp
-        internal static async Task<IBaseAudit?> FactoryBase(Type source)
-        {
-            var data = await _sessionService.GetSessionDataAsync();
-
-            var result = (ExtendedBaseAudit?)Activator.CreateInstance(source);
-            result!.UserId = data.UserId;
-            result!.UserName = data.UserName;
+            var result = (IExtendedBaseAudit?)Activator.CreateInstance(entityAuditType);
+            ///Mockup a delay simulating extract additional data from service
+            await Task.Delay(1);
+            result!.UserId = "User1";
+            result!.UserName = "Username";
             return result;
         }
+    }
 ```
 
-- Finally you must inject dependencies
+- Inject interceptor into Services and attach it to context
 
 ```csharp
-        services.AddAnotherService();
-        ....
-        // inject your session service or another method to get additional information for audit tables
-        services.AddTransient<ISessionService, YourSessionService>();
+    builder.Services.AddAnotherService();
+    ....
+    // inject your session service or another method to get additional information for audit tables
+    builder.Services.AddTransient<ISessionService, YourSessionService>();
 
-        services.AddSingleton<ILogJsonSerializer, LogJsonSerializer>();
+    builder.Services.AddSingleton<ILogJsonSerializer, LogJsonSerializer>();
 
+    builder.Services.AddSingleton<AuditInterceptor>();
+    builder.Services.AddDbContext<BlogContext>(
+        (serviceProvider, options) => 
+        {
+            options.UseSqlServer(configuration["ConnectionStrings:MyconnectionString"], sqlOptions =>
+            {
+                sqlOptions.MigrationsAssembly(typeof(Program).GetTypeInfo().Assembly.GetName().Name);
+                sqlOptions.EnableRetryOnFailure(maxRetryCount: 15, maxRetryDelay: TimeSpan.FromSeconds(30), null);
+            });
+
+            options.AddInterceptors(
+                serviceProvider.GetRequiredService<AuditInterceptor>()
+            );
+        },
+        ServiceLifetime.Singleton  //Showing explicitly that the DbContext is shared across the HTTP request scope (graph of objects started in the HTTP request)
+    );
 ```
+
 ## Buy me a coofee
 If you want, buy me a coofee :coffee: https://www.paypal.com/paypalme/vicosanzdev?locale.x=es_XC
 

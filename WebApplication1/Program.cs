@@ -3,6 +3,8 @@ using WebApplication1;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<AuditInterceptor>();
+
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddCustomDbContext(builder.Configuration);
