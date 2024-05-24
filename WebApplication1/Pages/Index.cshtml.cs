@@ -1,9 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore;
-using WebApplication1.Models;
+﻿using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using WebApplication1.Models;
 
 namespace WebApplication1.Pages
 {
@@ -26,7 +24,7 @@ namespace WebApplication1.Pages
                 Name = "Test",
             });
 
-            var blog = _blogContext.Blogs.Single(x=> x.Id == 1);
+            var blog = _blogContext.Blogs.Single(x => x.Id == 1);
             if (blog != null)
             {
                 blog.Name = "Test2";

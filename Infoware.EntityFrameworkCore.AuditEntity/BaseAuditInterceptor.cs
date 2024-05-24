@@ -3,25 +3,16 @@ using Infoware.SensitiveDataLogger.JsonSerializer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Reflection.Metadata.Ecma335;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Infoware.EntityFrameworkCore.AuditEntity
 {
     public abstract class BaseAuditInterceptor : SaveChangesInterceptor
     {
         private readonly ILogJsonSerializer _logJsonSerializer;
-        private List<EntityEntry<IAuditable>> addeds = new();
+        private List<EntityEntry<IAuditable>> addeds = [];
 
-        public BaseAuditInterceptor(ILogJsonSerializer logJsonSerializer)
-        {
-            _logJsonSerializer = logJsonSerializer;
-        }
+        public BaseAuditInterceptor(ILogJsonSerializer logJsonSerializer) => _logJsonSerializer = logJsonSerializer;
 
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
                                                                               InterceptionResult<int> result,
@@ -113,7 +104,7 @@ namespace Infoware.EntityFrameworkCore.AuditEntity
                     {
                         continue;
                     }
-                    ((IDictionary<string, object?>)json)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? "**SensitiveData**" : prop.CurrentValue;
+                    ((IDictionary<string, object?>)json)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? Constants.SensitiveDataLegend : prop.CurrentValue;
                 }
             }
 
@@ -137,21 +128,21 @@ namespace Infoware.EntityFrameworkCore.AuditEntity
                     {
                         if (!prop.OriginalValue.Equals(prop.CurrentValue))
                         {
-                            ((IDictionary<string, object?>)bef)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? "**SensitiveData**" : prop.OriginalValue;
+                            ((IDictionary<string, object?>)bef)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? Constants.SensitiveDataLegend : prop.OriginalValue;
                         }
                         else
                         {
                             databaseValues ??= entry.GetDatabaseValues();
                             var originalValue = databaseValues!.GetValue<object>(prop.Metadata.Name);
-                            ((IDictionary<string, object?>)bef)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? "**SensitiveData**" : originalValue;
+                            ((IDictionary<string, object?>)bef)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? Constants.SensitiveDataLegend : originalValue;
                         }
                     }
                     else
                     {
-                        ((IDictionary<string, object?>)bef)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? "**SensitiveData**" : default;
+                        ((IDictionary<string, object?>)bef)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? Constants.SensitiveDataLegend : default;
                     }
 
-                    ((IDictionary<string, object?>)aft)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? "**SensitiveData**" : prop.CurrentValue!;
+                    ((IDictionary<string, object?>)aft)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? Constants.SensitiveDataLegend : prop.CurrentValue!;
                 }
             }
 
@@ -169,28 +160,19 @@ namespace Infoware.EntityFrameworkCore.AuditEntity
 
             foreach (var prop in entry.Properties)
             {
-                ((IDictionary<string, object?>)json)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? "**SensitiveData**" : prop.OriginalValue;
+                ((IDictionary<string, object?>)json)[prop.Metadata.Name] = IfEntryPropertySensitive(prop, sensitives) ? Constants.SensitiveDataLegend : prop.OriginalValue;
             }
             audit.Operation = EntityState.Deleted.ToString();
             audit.Details = _logJsonSerializer.SerializeObject(json);
         }
 
-        private static IEnumerable<string> GetSensitiveProperties(EntityEntry entry)
-        {
-            return entry.Metadata.ClrType.GetProperties()
+        private static IEnumerable<string> GetSensitiveProperties(EntityEntry entry) =>
+            entry.Metadata.ClrType.GetProperties()
                 .Where(p => p.GetCustomAttributes<SensitiveDataAttribute>(true).Any())
                 .Select(p => p.Name);
-        }
 
-        private static bool IfEntryPropertySensitive(PropertyEntry prop, IEnumerable<string> sensitives)
-        {
-            return sensitives.Contains(prop.Metadata.Name);
-        }
+        private static bool IfEntryPropertySensitive(PropertyEntry prop, IEnumerable<string> sensitives) => sensitives.Contains(prop.Metadata.Name);
 
-        public virtual Task<IBaseAudit?> InitAuditObject(Type entityAuditType)
-        {
-            var result = (IBaseAudit?)Activator.CreateInstance(entityAuditType);
-            return Task.FromResult(result);
-        }
+        public virtual Task<IBaseAudit?> InitAuditObject(Type entityAuditType) => Task.FromResult((IBaseAudit?)Activator.CreateInstance(entityAuditType));
     }
 }

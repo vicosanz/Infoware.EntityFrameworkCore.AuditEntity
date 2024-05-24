@@ -8,7 +8,7 @@ namespace WebApplication1
         public static IServiceCollection AddCustomDbContext(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddDbContext<BlogContext>(
-                (serviceProvider, options) => 
+                (serviceProvider, options) =>
                 {
                     options.UseSqlServer(configuration["ConnectionStrings:DocumentosElectronicosSRI"], sqlOptions =>
                     {

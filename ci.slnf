@@ -1,0 +1,8 @@
+{
+  "solution": {
+    "path": "Infoware.EntityFrameworkCore.AuditEntity.sln",
+    "projects": [
+      "Infoware.EntityFrameworkCore.AuditEntity\\Infoware.EntityFrameworkCore.AuditEntity.csproj"
+    ]
+  }
+}
